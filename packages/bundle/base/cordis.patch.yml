@@ -411,6 +411,13 @@
       config:
         apiKeyEnv: DEEPSEEK_API_KEY
 
+    # Generic OpenAI Responses native search. Mounted dormant beside the shipped
+    # DeepSeek route; a profile opts in by selecting `openai-responses` above.
+    - id: web-search-openai-responses
+      name: '@deepseek-ai/dsh-web-search-openai-responses'
+      config:
+        apiKeyEnv: OPENAI_API_KEY
+
     - id: tool-web
       name: '@deepseek-ai/dsh-tool-web'
       config:

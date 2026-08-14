@@ -1026,6 +1026,8 @@ export interface PiAiModelProfile {
   reasoningEfforts?: false | PiAiReasoningEfforts
   /** Reasoning-dispatch switches for this model, winning over the route's. */
   compat?: PiAiCompatProfile
+  /** Provider-executed tools enabled for this model. */
+  nativeTools?: PiAiNativeTool[]
 }
 
 /**
@@ -1065,6 +1067,9 @@ export type PiAiModality = Model<Api>['input'][number]
  * from the dict is not offered.
  */
 export type PiAiReasoningEfforts = Partial<Record<ModelThinkingLevel, string | null>>
+
+/** Provider-executed tools that a configured model may expose. */
+export type PiAiNativeTool = 'web_search'
 
 /** One reasoning-dispatch wire format a profile may name. */
 export type PiAiThinkingFormat = Exclude<PiThinkingFormat, WithheldThinkingFormat>
@@ -2968,6 +2973,27 @@ export interface Config {
 ```
 
 来源：[`packages/web/web-search-exa/src/index.ts:38`](../packages/web/web-search-exa/src/index.ts)
+
+<a id="deepseek-aidsh-web-search-openai-responses"></a>
+
+## `@deepseek-ai/dsh-web-search-openai-responses`
+
+需要：`web`
+
+```ts config-catalog
+export interface Config {
+  /** Literal API key; prefer apiKeyEnv so configuration stays secret-free. */
+  readonly apiKey?: string
+  /** Credential reference resolved for each search. */
+  readonly apiKeyEnv?: string
+  /** Responses API base URL. */
+  readonly baseURL?: string
+  /** Model used for the auxiliary search request. */
+  readonly model?: string
+}
+```
+
+来源：[`packages/web/web-search-openai-responses/src/index.ts:20`](../packages/web/web-search-openai-responses/src/index.ts)
 
 <a id="deepseek-aidsh-web-search-perplexity"></a>
 
