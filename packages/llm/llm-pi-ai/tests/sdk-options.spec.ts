@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 
 const streamSimple = vi.hoisted(() => vi.fn())
+const responsesStreamSimple = vi.hoisted(() => vi.fn())
 
 // A hand-declared route is built by `createProvider` over the protocol table in
 // `src/provider.ts`, so the table's lazy api module is the SDK boundary this
@@ -11,10 +12,17 @@ vi.mock('@earendil-works/pi-ai/api/openai-completions.lazy', () => ({
   openAICompletionsApi: () => ({ stream: streamSimple, streamSimple }),
 }))
 
+vi.mock('@earendil-works/pi-ai/api/openai-responses.lazy', () => ({
+  openAIResponsesApi: () => ({ stream: responsesStreamSimple, streamSimple: responsesStreamSimple }),
+}))
+
 import { PiAiAdapter } from '../src/adapter.ts'
 import { resolveProfiles } from '../src/config.ts'
 
-afterEach(() => { streamSimple.mockReset() })
+afterEach(() => {
+  streamSimple.mockReset()
+  responsesStreamSimple.mockReset()
+})
 
 /** A hand-declared OpenAI-compatible route with one fully described model. */
 function gatewayAdapter(): PiAiAdapter {
@@ -38,6 +46,31 @@ async function drain(adapter: PiAiAdapter): Promise<StreamChunk[]> {
     messages: [],
   })) chunks.push(chunk)
   return chunks
+}
+
+/** An OpenAI Responses route with native search enabled on only one model. */
+function responsesAdapter(): PiAiAdapter {
+  return new PiAiAdapter({
+    profiles: () => resolveProfiles({
+      'responses-gateway': {
+        api: 'openai-responses',
+        baseURL: 'http://127.0.0.1:9/v1',
+        models: [
+          { id: 'searching', nativeTools: ['web_search'] },
+          { id: 'plain' },
+        ],
+      },
+    }),
+    resolveApiKey: () => Promise.resolve('test-key'),
+  })
+}
+
+async function drainModel(adapter: PiAiAdapter, model: string): Promise<void> {
+  for await (const _chunk of adapter.stream({
+    provider: 'responses-gateway',
+    model,
+    messages: [],
+  })) { /* drain */ }
 }
 
 describe('pi-ai SDK retry boundary', () => {
@@ -69,5 +102,30 @@ describe('pi-ai SDK retry boundary', () => {
       contextWindow: 8192,
       maxTokens: 1024,
     })
+  })
+
+  it('replaces the local web_search function with native Responses search for the configured model only', async () => {
+    responsesStreamSimple.mockImplementation(() => { throw new Error('mock SDK boundary') })
+    const adapter = responsesAdapter()
+
+    await drainModel(adapter, 'searching')
+    const options = responsesStreamSimple.mock.calls[0]?.[2] as { onPayload?: (payload: unknown) => unknown }
+    expect(options.onPayload?.({
+      model: 'searching',
+      tools: [
+        { type: 'function', name: 'bash' },
+        { type: 'function', name: 'web_search' },
+      ],
+    })).toEqual({
+      model: 'searching',
+      tools: [
+        { type: 'function', name: 'bash' },
+        { type: 'web_search' },
+      ],
+    })
+
+    responsesStreamSimple.mockClear()
+    await drainModel(adapter, 'plain')
+    expect(responsesStreamSimple.mock.calls[0]?.[2]).not.toHaveProperty('onPayload')
   })
 })

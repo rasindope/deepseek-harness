@@ -50,6 +50,7 @@ import type {
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
+import type { PiAiNativeTool } from './catalog.ts'
 import { toPiContext } from './context.ts'
 import { toStreamChunks } from './stream.ts'
 
@@ -175,6 +176,28 @@ function requestHeaders(headers: Readonly<Record<string, string>> | undefined): 
   return {
     ...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
     ...attribution,
+  }
+}
+
+/** Replace same-named client functions with provider-executed tools in one Responses payload. */
+function withNativeTools(payload: unknown, nativeTools: readonly PiAiNativeTool[]): unknown {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return payload
+  const body = payload as Record<string, unknown>
+  const configured = new Set<string>(nativeTools)
+  const tools = Array.isArray(body['tools']) ? body['tools'] : []
+  return {
+    ...body,
+    tools: [
+      ...tools.filter((tool) => {
+        if (typeof tool !== 'object' || tool === null || Array.isArray(tool)) return true
+        const entry = tool as Record<string, unknown>
+        if (typeof entry['type'] === 'string' && configured.has(entry['type'])) return false
+        return !(entry['type'] === 'function'
+          && typeof entry['name'] === 'string'
+          && configured.has(entry['name']))
+      }),
+      ...nativeTools.map(type => ({ type })),
+    ],
   }
 }
 
@@ -310,6 +333,7 @@ export class PiAiAdapter extends LlmAdapter {
       const context = attachments === undefined
         ? toPiContext(options)
         : await toPiContext(options, attachments)
+      const nativeTools = profile.nativeTools.get(model.id) ?? []
       const events = snapshot.models.streamSimple(model, context, {
         ...profileOptions(profile, reasoning, apiKey),
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
@@ -319,6 +343,9 @@ export class PiAiAdapter extends LlmAdapter {
         // Profile headers are deployment-owned; attribution names are
         // Harness-owned and therefore win collisions.
         headers: requestHeaders(profile.headers),
+        ...nativeTools.length === 0 ? {} : {
+          onPayload: (payload: unknown) => withNativeTools(payload, nativeTools),
+        },
       })
       const iterator = toStreamChunks(events, model.contextWindow)[Symbol.asyncIterator]()
       let exhausted = false
