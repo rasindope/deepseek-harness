@@ -186,6 +186,32 @@ describe('hand-declared providers', () => {
     expect(resolved.get('acme-gateway')?.configuredMaxTokens.get('sized')).toBe(512)
   })
 
+  it('keeps native tools as model-level request metadata', () => {
+    const resolved = resolveProfiles({
+      'responses-gateway': {
+        api: 'openai-responses',
+        baseURL: 'https://responses.test/v1',
+        models: [
+          { id: 'searching', nativeTools: ['web_search'] },
+          { id: 'plain' },
+        ],
+      },
+    })
+
+    expect(resolved.get('responses-gateway')?.nativeTools.get('searching')).toEqual(['web_search'])
+    expect(resolved.get('responses-gateway')?.nativeTools.has('plain')).toBe(false)
+  })
+
+  it('rejects native tools on a protocol that cannot map them', () => {
+    expect(() => resolveProfiles({
+      'completions-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://completions.test/v1',
+        models: [{ id: 'wrong-protocol', nativeTools: ['web_search'] }],
+      },
+    })).toThrow(/supported only on openai-responses/)
+  })
+
   it('takes a model’s declared modalities, then the catalog’s, then the route’s', () => {
     const vision = getBuiltinModels('anthropic').find(model => model.input.includes('image'))
     if (vision === undefined) throw new Error('the installed catalog ships no anthropic vision model')

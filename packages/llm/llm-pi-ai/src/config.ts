@@ -21,12 +21,13 @@ import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { resolveRetryPolicy, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
 import type { ResolvedRetryPolicy, RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
-import { MODALITIES, resolveRouteModels, SUPPORTED_THINKING_FORMATS, THINKING_LEVELS } from './catalog.ts'
+import { MODALITIES, NATIVE_TOOLS, resolveRouteModels, SUPPORTED_THINKING_FORMATS, THINKING_LEVELS } from './catalog.ts'
 import type {
   PiAiCompatProfile,
   PiAiModality,
   PiAiModelOverride,
   PiAiModelProfile,
+  PiAiNativeTool,
   PiAiReasoningEfforts,
 } from './catalog.ts'
 import { buildProvider, supportedProtocols } from './provider.ts'
@@ -57,6 +58,7 @@ export type {
   PiAiModality,
   PiAiModelOverride,
   PiAiModelProfile,
+  PiAiNativeTool,
   PiAiReasoningEfforts,
   PiAiThinkingFormat,
 } from './catalog.ts'
@@ -166,6 +168,8 @@ export interface ResolvedPiAiProviderProfile
    * own, so a catalog capability must not appear here.
    */
   configuredMaxTokens: ReadonlyMap<string, number>
+  /** Provider-executed tools enabled per model id. */
+  nativeTools: ReadonlyMap<string, readonly PiAiNativeTool[]>
 }
 
 /** Plugin configuration: the provider routes this instance owns. */
@@ -219,6 +223,7 @@ const modelFields = {
   // installed catalog's capability", while `false` disables reasoning.
   reasoningEfforts: z.union([z.const(false), reasoningEfforts]),
   compat: compatProfile,
+  nativeTools: z.array(z.union(NATIVE_TOOLS)),
 }
 
 const modelProfile: z<PiAiModelProfile> = z.object({
@@ -358,6 +363,7 @@ export function resolveProfiles(
       ...rest.headers === undefined ? {} : { headers: { ...rest.headers } },
       ...rest.thinkingBudgets === undefined ? {} : { thinkingBudgets: { ...rest.thinkingBudgets } },
       configuredMaxTokens: catalog.configuredMaxTokens,
+      nativeTools: catalog.nativeTools,
       piProvider: buildProvider({
         provider,
         displayName,

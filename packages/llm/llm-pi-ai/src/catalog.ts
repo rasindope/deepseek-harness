@@ -47,6 +47,12 @@ const MODALITY_GATE: Record<PiAiModality, true> = {
 /** Every request modality a profile may declare. */
 export const MODALITIES = Object.keys(MODALITY_GATE) as readonly PiAiModality[]
 
+/** Provider-executed tools that a configured model may expose. */
+export type PiAiNativeTool = 'web_search'
+
+/** Native tools supported by the adapter's provider payload mapping. */
+export const NATIVE_TOOLS = ['web_search'] as const satisfies readonly PiAiNativeTool[]
+
 /**
  * One entry's modality list, or `undefined` when it states no answer. Absent
  * and empty mean the same thing — `[]` describes a model that accepts nothing
@@ -235,6 +241,8 @@ export interface PiAiModelProfile {
   reasoningEfforts?: false | PiAiReasoningEfforts
   /** Reasoning-dispatch switches for this model, winning over the route's. */
   compat?: PiAiCompatProfile
+  /** Provider-executed tools enabled for this model. */
+  nativeTools?: PiAiNativeTool[]
 }
 
 /**
@@ -433,6 +441,8 @@ export interface RouteCatalog {
    * picked, so only an explicit configuration lands here.
    */
   configuredMaxTokens: ReadonlyMap<string, number>
+  /** Provider-executed tools configured per model id. */
+  nativeTools: ReadonlyMap<string, readonly PiAiNativeTool[]>
 }
 
 /**
@@ -489,6 +499,7 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     || request.compat?.supportsReasoningEffort !== undefined
   const seen = new Set<string>()
   const configuredMaxTokens = new Map<string, number>()
+  const nativeTools = new Map<string, readonly PiAiNativeTool[]>()
   const models = entries.map((entry) => {
     if (entry.id.length === 0) invalid(provider, 'has a model with an empty id')
     if (seen.has(entry.id)) invalid(provider, `lists model "${entry.id}" more than once`)
@@ -518,6 +529,15 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     // Only a value the profile named is a deployment choice; the catalog's is
     // the model's capability and stays out of request defaults.
     if (entry.maxTokens !== undefined) configuredMaxTokens.set(entry.id, entry.maxTokens)
+    const configuredNativeTools = entry.nativeTools ?? []
+    if (new Set(configuredNativeTools).size !== configuredNativeTools.length) {
+      invalid(provider, `model "${entry.id}" lists a native tool more than once`)
+    }
+    if (configuredNativeTools.length > 0 && api !== 'openai-responses') {
+      invalid(provider, `model "${entry.id}" sets nativeTools, but its api is "${api}";`
+        + ' provider-native web_search is supported only on openai-responses')
+    }
+    if (configuredNativeTools.length > 0) nativeTools.set(entry.id, [...configuredNativeTools])
     return {
       // The installed entry lays the floor, and the fields below override it.
       // Enumerating instead would silently drop every `Model` field this
@@ -542,5 +562,5 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     invalid(provider, 'sets compat reasoning switches, but no model on the route speaks openai-completions;'
       + ' thinkingFormat and supportsReasoningEffort exist only on that protocol')
   }
-  return { models, configuredMaxTokens }
+  return { models, configuredMaxTokens, nativeTools }
 }
