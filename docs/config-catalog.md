@@ -2972,27 +2972,6 @@ export interface Config {
 
 Source: [`packages/web/web-search-exa/src/index.ts:38`](../packages/web/web-search-exa/src/index.ts)
 
-<a id="deepseek-aidsh-web-search-openai-responses"></a>
-
-## `@deepseek-ai/dsh-web-search-openai-responses`
-
-Requires: `web`
-
-```ts config-catalog
-export interface Config {
-  /** Literal API key; prefer apiKeyEnv so configuration stays secret-free. */
-  readonly apiKey?: string
-  /** Credential reference resolved for each search. */
-  readonly apiKeyEnv?: string
-  /** Responses API base URL. */
-  readonly baseURL?: string
-  /** Model used for the auxiliary search request. */
-  readonly model?: string
-}
-```
-
-Source: [`packages/web/web-search-openai-responses/src/index.ts:20`](../packages/web/web-search-openai-responses/src/index.ts)
-
 <a id="deepseek-aidsh-web-search-perplexity"></a>
 
 ## `@deepseek-ai/dsh-web-search-perplexity`
